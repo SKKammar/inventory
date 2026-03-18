@@ -84,11 +84,11 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Get all claims from token
+     * Get all claims from token - ✅ FIXED
      */
     public Claims getAllClaimsFromToken(String token) {
         try {
-            return Jwts.parserBuilder()
+            return Jwts.parserBuilder()  // ✅ Correct method
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token)
@@ -132,11 +132,11 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Validate JWT token
+     * Validate JWT token - ✅ FIXED
      */
     public Boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder()
+            Jwts.parserBuilder()  // ✅ Correct method
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token);

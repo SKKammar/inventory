@@ -48,7 +48,7 @@ public class OrderService {
     private UserRepository userRepository;
 
     @Autowired
-    private InventoryService inventoryService;
+    private InventoryService inventoryService;  // ✅ Injected instance
 
     /**
      * Create new order
@@ -68,7 +68,7 @@ public class OrderService {
             Product product = productRepository.findById(itemRequest.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemRequest.getProductId()));
 
-            // Check stock availability
+            // ✅ CORRECT - using injected instance (lowercase 'i')
             if (!inventoryService.isStockAvailable(product.getId(), itemRequest.getQuantity())) {
                 Integer availableStock = product.getCurrentStock();
                 throw new InsufficientStockException(
@@ -110,7 +110,7 @@ public class OrderService {
             item.setOrder(savedOrder);
             orderItemRepository.save(item);
 
-            // Update inventory
+            // ✅ CORRECT - using injected instance
             inventoryService.updateStockForOrder(item.getProduct().getId(), item.getQuantity());
         }
 
@@ -232,7 +232,7 @@ public class OrderService {
                     "Cannot cancel order in " + order.getStatus() + " status");
         }
 
-        // Return stock for all items
+        // ✅ CORRECT - using injected instance
         for (OrderItem item : order.getOrderItems()) {
             inventoryService.returnStockForCancelledOrder(item.getProduct().getId(), item.getQuantity());
         }
@@ -363,8 +363,8 @@ public class OrderService {
     /**
      * Convert User to UserResponseDTO
      */
-    private com.inventory.dto.UserResponseDTO convertUserToDTO(User user) {
-        return com.inventory.dto.UserResponseDTO.builder()
+    private com.example.inventory.dto.UserResponseDTO convertUserToDTO(User user) {
+        return com.example.inventory.dto.UserResponseDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())

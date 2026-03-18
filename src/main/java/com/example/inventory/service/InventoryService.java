@@ -148,6 +148,21 @@ public class InventoryService {
     }
 
     /**
+     * Check stock availability - ✅ NOW PUBLIC
+     */
+    public boolean isStockAvailable(Long productId, Integer requiredQuantity) {
+        logger.info("Checking stock availability for product: {}, required: {}", productId, requiredQuantity);
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+
+        boolean available = product.getCurrentStock() >= requiredQuantity;
+        logger.info("Stock available: {}, current: {}", available, product.getCurrentStock());
+
+        return available;
+    }
+
+    /**
      * Calculate new stock based on movement type
      */
     private Integer calculateNewStock(Integer currentStock, Integer quantity, MovementType movementType) {

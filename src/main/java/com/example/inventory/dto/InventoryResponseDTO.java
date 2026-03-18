@@ -1,4 +1,4 @@
-package com.inventory.dto;
+package com.example.inventory.dto;
 
 import com.example.inventory.entity.Inventory.MovementType;
 import lombok.AllArgsConstructor;

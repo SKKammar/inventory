@@ -5,7 +5,7 @@ spring:
   # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -16,9 +16,9 @@ spring:
 
   # Database Configuration
   datasource:
-    url: jdbc:mysql://localhost:3306/inventory_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/inventory_db1?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
-    password: root
+    password: Santosh
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -43,7 +43,7 @@ server:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-super-secret-key-at-least-32-characters-long-for-hs512}
+  secret: your-super-secret-key-at-least-32-characters-long-for-hs512-algorithm
   expiration: 3600000  # 1 hour in milliseconds
 
 # Logging Configuration
@@ -53,10 +53,8 @@ logging:
     com.inventory: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/inventory-system.log
 
