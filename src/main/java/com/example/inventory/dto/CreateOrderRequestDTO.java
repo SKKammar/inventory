@@ -1,26 +1,10 @@
 package com.example.inventory.dto;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.*;
+import lombok.*;
 import java.util.List;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data @NoArgsConstructor @AllArgsConstructor
 public class CreateOrderRequestDTO {
-
-    @NotNull(message = "User ID is required")
-    private Long userId;
-
-    @NotEmpty(message = "Order must contain at least one item")
-    @Valid
-    private List<OrderItemRequestDTO> items;
-
+    @NotNull private Long userId;
+    @NotEmpty private List<OrderItemRequestDTO> items;
     private String shippingAddress;
 }

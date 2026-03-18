@@ -1,29 +1,23 @@
 package com.example.inventory.service;
 
-import com.example.inventory.dto.AuthRequestDTO;
-import com.example.inventory.dto.AuthResponseDTO;
-import com.example.inventory.dto.SignupRequestDTO;
-import com.example.inventory.dto.UserResponseDTO;
-import com.example.inventory.entity.RefreshToken;
-import com.example.inventory.entity.User;
-import com.example.inventory.exception.InvalidCredentialsException;
-import com.example.inventory.exception.InvalidTokenException;
-import com.example.inventory.exception.ResourceNotFoundException;
-import com.example.inventory.repository.RefreshTokenRepository;
-import com.example.inventory.repository.UserRepository;
+import com.example.inventory.dto.*;
+import com.example.inventory.entity.*;
+import com.example.inventory.exception.*;
+import com.example.inventory.repository.*;
 import com.example.inventory.security.JwtTokenProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,148 +26,106 @@ public class AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+    @Autowired private AuthenticationManager authenticationManager;
+    @Autowired private UserRepository userRepository;
+    @Autowired private RoleRepository roleRepository;
+    @Autowired private RefreshTokenRepository refreshTokenRepository;
+    @Autowired private JwtTokenProvider jwtTokenProvider;
+    @Autowired private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
+    @Value("${app.jwt.refresh-expiration-ms}")
+    private long refreshExpirationMs;
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-
-    @Autowired
-    private UserService userService;
-
-    private static final long REFRESH_TOKEN_VALIDITY_DAYS = 7;
-
-    /**
-     * Authenticate user and generate tokens
-     */
     public AuthResponseDTO authenticateUser(AuthRequestDTO loginRequest) {
-        logger.info("Authenticating user: {}", loginRequest.getUsername());
-
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
-                            loginRequest.getUsername(),
-                            loginRequest.getPassword()
-                    )
-            );
+                            loginRequest.getUsername(), loginRequest.getPassword()));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            String accessToken = jwtTokenProvider.generateTokenFromAuthentication(authentication);
-
+            String jwt = jwtTokenProvider.generateToken(authentication);
             User user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new ResourceNotFoundException("User", "username", loginRequest.getUsername()));
 
-            RefreshToken refreshToken = createRefreshToken(user);
-
-            UserResponseDTO userResponseDTO = userService.getUserByUsername(loginRequest.getUsername());
-
-            logger.info("User authenticated successfully: {}", loginRequest.getUsername());
-
-            return AuthResponseDTO.builder()
-                    .accessToken(accessToken)
-                    .refreshToken(refreshToken.getToken())
-                    .tokenType("Bearer")
-                    .expiresIn(3600L) // 1 hour
-                    .user(userResponseDTO)
-                    .build();
-
-        } catch (Exception ex) {
-            logger.error("Authentication failed for user: {}", loginRequest.getUsername());
+            String refreshToken = createRefreshToken(user);
+            return buildAuthResponse(jwt, refreshToken, user);
+        } catch (BadCredentialsException e) {
             throw new InvalidCredentialsException("Invalid username or password");
         }
     }
 
-    /**
-     * Register new user
-     */
     public AuthResponseDTO registerUser(SignupRequestDTO signupRequest) {
-        logger.info("Registering new user: {}", signupRequest.getUsername());
+        if (userRepository.existsByUsername(signupRequest.getUsername()))
+            throw new DuplicateResourceException("User", "username", signupRequest.getUsername());
+        if (userRepository.existsByEmail(signupRequest.getEmail()))
+            throw new DuplicateResourceException("User", "email", signupRequest.getEmail());
 
-        UserResponseDTO userResponseDTO = userService.registerUser(signupRequest);
+        Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "ROLE_CUSTOMER"));
 
-        User user = userRepository.findByUsername(signupRequest.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", signupRequest.getUsername()));
-
-        List<String> roles = user.getRoles().stream()
-                .map(role -> role.getName())
-                .collect(Collectors.toList());
-
-        String accessToken = jwtTokenProvider.generateToken(user.getUsername(), roles);
-        RefreshToken refreshToken = createRefreshToken(user);
-
-        logger.info("User registered and authenticated: {}", signupRequest.getUsername());
-
-        return AuthResponseDTO.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
-                .tokenType("Bearer")
-                .expiresIn(3600L)
-                .user(userResponseDTO)
+        User user = User.builder()
+                .username(signupRequest.getUsername())
+                .email(signupRequest.getEmail())
+                .password(passwordEncoder.encode(signupRequest.getPassword()))
+                .firstName(signupRequest.getFirstName())
+                .lastName(signupRequest.getLastName())
+                .phoneNumber(signupRequest.getPhoneNumber())
+                .address(signupRequest.getAddress())
+                .isActive(true)
+                .roles(new HashSet<>(Collections.singletonList(customerRole)))
                 .build();
+
+        User saved = userRepository.save(user);
+        String jwt = jwtTokenProvider.generateTokenFromUsername(saved.getUsername());
+        String refreshToken = createRefreshToken(saved);
+        return buildAuthResponse(jwt, refreshToken, saved);
     }
 
-    /**
-     * Refresh access token using refresh token
-     */
     public AuthResponseDTO refreshAccessToken(String refreshTokenStr) {
-        logger.info("Refreshing access token");
-
         RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
-                .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
+                .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
 
         if (refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             refreshTokenRepository.delete(refreshToken);
-            throw new InvalidTokenException("Refresh token has expired");
+            throw new TokenExpiredException("Refresh token expired. Please login again.");
         }
 
-        User user = refreshToken.getUser();
-        List<String> roles = user.getRoles().stream()
-                .map(role -> role.getName())
-                .collect(Collectors.toList());
+        String newJwt = jwtTokenProvider.generateTokenFromUsername(refreshToken.getUser().getUsername());
+        return buildAuthResponse(newJwt, refreshTokenStr, refreshToken.getUser());
+    }
 
-        String newAccessToken = jwtTokenProvider.generateToken(user.getUsername(), roles);
+    public void logout(String refreshTokenStr) {
+        refreshTokenRepository.findByToken(refreshTokenStr)
+                .ifPresent(refreshTokenRepository::delete);
+    }
 
-        logger.info("Access token refreshed successfully for user: {}", user.getUsername());
+    private String createRefreshToken(User user) {
+        refreshTokenRepository.deleteByUser(user);
+        RefreshToken token = RefreshToken.builder()
+                .token(UUID.randomUUID().toString())
+                .user(user)
+                .expiryDate(LocalDateTime.now().plusSeconds(refreshExpirationMs / 1000))
+                .build();
+        return refreshTokenRepository.save(token).getToken();
+    }
+
+    private AuthResponseDTO buildAuthResponse(String jwt, String refreshToken, User user) {
+        UserResponseDTO userDTO = UserResponseDTO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .isActive(user.getIsActive())
+                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .build();
 
         return AuthResponseDTO.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(refreshTokenStr)
+                .accessToken(jwt)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .expiresIn(3600L)
+                .expiresIn(86400000L)
+                .user(userDTO)
                 .build();
-    }
-
-    /**
-     * Logout user
-     */
-    public void logout(String refreshTokenStr) {
-        logger.info("Logging out user");
-
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
-                .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
-
-        refreshTokenRepository.delete(refreshToken);
-        logger.info("User logged out successfully");
-    }
-
-    /**
-     * Create refresh token
-     */
-    private RefreshToken createRefreshToken(User user) {
-        // Delete existing refresh token for this user
-        refreshTokenRepository.findByUser(user).ifPresent(refreshTokenRepository::delete);
-
-        RefreshToken refreshToken = RefreshToken.builder()
-                .token(java.util.UUID.randomUUID().toString())
-                .user(user)
-                .expiryDate(LocalDateTime.now().plusDays(REFRESH_TOKEN_VALIDITY_DAYS))
-                .build();
-
-        return refreshTokenRepository.save(refreshToken);
     }
 }

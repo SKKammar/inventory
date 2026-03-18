@@ -16,9 +16,6 @@ public class Application {
 		SpringApplication.run(Application.class, args);
 	}
 
-	/**
-	 * ModelMapper Bean for entity-DTO conversion
-	 */
 	@Bean
 	public ModelMapper modelMapper() {
 		return new ModelMapper();

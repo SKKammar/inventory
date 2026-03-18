@@ -9,14 +9,18 @@ import java.util.Set;
 
 @Entity
 @Table(name = "products")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = {"orderItems", "inventoryMovements"})
 public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     @Column(nullable = false, length = 100)
@@ -26,6 +30,7 @@ public class Product {
     private String description;
 
     @Column(unique = true, nullable = false, length = 50)
+    @EqualsAndHashCode.Include
     private String sku;
 
     @Column(length = 50)
@@ -47,6 +52,7 @@ public class Product {
     private String unit;
 
     @Column(name = "is_active")
+    @Builder.Default
     private Boolean isActive = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -56,9 +62,11 @@ public class Product {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private Set<OrderItem> orderItems = new HashSet<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private Set<Inventory> inventoryMovements = new HashSet<>();
 
     @PrePersist
