@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+
+  # ── MySQL Database ───────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: inventory-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: inventory_db
+      MYSQL_USER: inventory_user
+      MYSQL_PASSWORD: inventory_pass
+    ports:
+      - "3307:3306"       # 3307 on host so it doesn't clash with local MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql    # data persists across restarts
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Spring Boot App ──────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inventory-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Override application.yaml values with Docker environment variables
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/inventory_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: inventory_user
+      SPRING_DATASOURCE_PASSWORD: inventory_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      APP_JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      APP_JWT_EXPIRATION_MS: 86400000
+      APP_JWT_REFRESH_EXPIRATION_MS: 604800000
+    depends_on:
+      mysql:
+        condition: service_healthy    # wait for MySQL to be ready before starting app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v3/api-docs || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mysql_data:
+    driver: local
