@@ -50,10 +50,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:3000", "http://localhost:8080", "http://localhost:8081"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // Allow all origins including local HTML files (origin = "null")
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET","POST","PUT","DELETE","OPTIONS","PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -77,47 +79,27 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // ── Public: auth endpoints ──────────────────────────────
                         .requestMatchers("/api/auth/**").permitAll()
-
-                        // ── Public: Swagger / OpenAPI ───────────────────────────
                         .requestMatchers(
-                                "/swagger-ui.html",
-                                "/swagger-ui/**",
-                                "/v3/api-docs",
-                                "/v3/api-docs/**",
-                                "/v3/api-docs.yaml",
-                                "/swagger-resources",
-                                "/swagger-resources/**",
-                                "/webjars/**",
-                                "/favicon.ico"
+                                "/swagger-ui.html", "/swagger-ui/**",
+                                "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-resources/**", "/webjars/**", "/favicon.ico"
                         ).permitAll()
-
-                        // ── Public: product browsing ────────────────────────────
                         .requestMatchers("/api/products/public/**").permitAll()
-
-                        // ── Products ────────────────────────────────────────────
                         .requestMatchers(HttpMethod.GET,    "/api/products/**").authenticated()
                         .requestMatchers(HttpMethod.POST,   "/api/products").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT,    "/api/products/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
-
-                        // ── Orders ──────────────────────────────────────────────
                         .requestMatchers(HttpMethod.POST,   "/api/orders").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/orders").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET,    "/api/orders/user/**").authenticated()
                         .requestMatchers(HttpMethod.PUT,    "/api/orders/**").hasAnyRole("ADMIN","WAREHOUSE_STAFF")
-
-                        // ── Inventory ───────────────────────────────────────────
+                        .requestMatchers(HttpMethod.DELETE, "/api/orders/**").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/inventory/**").hasAnyRole("ADMIN","WAREHOUSE_STAFF")
                         .requestMatchers(HttpMethod.POST,   "/api/inventory/**").hasRole("ADMIN")
-
-                        // ── Users ───────────────────────────────────────────────
                         .requestMatchers(HttpMethod.GET,    "/api/users/**").authenticated()
                         .requestMatchers(HttpMethod.PUT,    "/api/users/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
-
-                        // ── Everything else requires auth ───────────────────────
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
